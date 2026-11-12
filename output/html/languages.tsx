@@ -89,6 +89,10 @@ export const Languages = ( { data }: PanelProps<DataTypes['languages']> ) => {
 							__( 'Not Found', 'query-monitor' )
 						)
 					),
+					sorting: {
+						field: 'found',
+						default: 'desc',
+					},
 				},
 			} }
 			data={ data.languages }
