@@ -49,6 +49,54 @@ To start the file watcher which will watch for changes and automatically compile
 
 	npm run watch
 
+If Query Monitor shows "Dependencies for Query Monitor need to be installed" then `vendor` is missing; run `composer install`. If the toolbar or panel is missing, or the page source contains `QM Assets Error`, then `assets/build` is missing; run the build above.
+
+## Developing on Windows
+
+### Building the assets
+
+`npm run build` fails on Windows during its `build-schemas` step with a `ResolverError` about a path such as `node_modules\@bcherny\json-schema-ref-parser\C:\...\src\schemas\callback.json`. The schema generator can't resolve Windows paths.
+
+The files that `build-schemas` generates (`output/data-types.ts` and `data/*.php`) are committed, so if you haven't changed `src/schema.json` or `src/schemas/` you can skip that step and run Vite directly:
+
+	npx vite build
+
+To start the file watcher:
+
+	npx vite
+
+If you have changed the schemas, run `build-schemas` in a Linux container instead (see below), then run `npx vite build`.
+
+### Using Podman instead of Composer, Node, or Docker Desktop
+
+If you use [Podman](https://podman.io/), you can run the tools in containers instead of installing them. These examples are for PowerShell, run from the plugin directory, with the Podman machine running (`podman machine start`).
+
+Install the PHP dependencies with the official Composer image:
+
+	podman run --rm -it -v "${PWD}:/app" -w /app docker.io/library/composer:2 install
+
+Any other Composer command works the same way, for example `composer test:phpcs`:
+
+	podman run --rm -it -v "${PWD}:/app" -w /app docker.io/library/composer:2 test:phpcs
+
+Generate the data types with the Node version from `.nvmrc`:
+
+	podman run --rm -it -v "${PWD}:/app" -w /app docker.io/library/node:24 npm run build-schemas
+
+The container writes LF line endings. With `core.autocrlf=true`, unchanged generated files then show as modified in `git status`. Check with `git diff --ignore-cr-at-eol`, and restore unchanged ones with `git checkout -- data output/data-types.ts`.
+
+The test containers are defined in `docker-compose.yml`, which `composer test:start` and `composer test:stop` start and stop with `docker compose`. With Podman, run the equivalent `podman compose` commands, which need the same environment variables:
+
+	$env:PLUGIN_SLUG = 'query-monitor'
+	$env:COMPOSE_PROJECT_NAME = 'query-monitor-local'
+	podman compose up --quiet-pull -d
+
+To stop them:
+
+	podman compose down
+
+The integration and acceptance test scripts call `docker compose` directly, so running them with Podman requires `docker` to be available on your `PATH`, for example through Podman Desktop's Docker compatibility.
+
 ## Data Type Generation
 
 Query Monitor uses JSON Schema to define the structure of data passed between PHP collectors and React output panels. This ensures type safety across both languages.
