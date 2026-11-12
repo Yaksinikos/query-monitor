@@ -1360,6 +1360,54 @@ select {
 		cursor: default;
 		white-space: nowrap;
 	}
+
+	/** Sorters */
+
+	thead th.qm-sortable-column:hover {
+		background: var( --qm-container-bg );
+	}
+
+	.qm-sort-controls {
+		align-items: center;
+		border: none;
+		color: inherit;
+		display: flex;
+		font: inherit;
+		padding: 0;
+		text-align: inherit;
+		width: 100%;
+
+		.qm-icon {
+			flex-shrink: 0;
+			fill: #ccc;
+			height: 16px;
+			width: 16px;
+		}
+	}
+
+	.qm-sort-heading {
+		flex-grow: 1;
+		white-space: nowrap;
+	}
+
+	.qm-sorted-desc .qm-sort-controls,
+	.qm-sorted-asc .qm-sort-controls {
+		.qm-icon {
+			fill: var( --qm-container-fg );
+		}
+	}
+
+	thead th.qm-sortable-column:hover .qm-sort-controls .qm-icon {
+		fill: var( --qm-panel-menu-bg-selected );
+	}
+
+	.qm-sorted-asc .qm-sort-controls .qm-icon {
+		transform: scaleY( -1 );
+	}
+
+	.qm-sort-controls:focus-visible {
+		box-shadow: 0 0 0 1px #fff, 0 0 0 3px var( --qm-button-bg-hover );
+	}
 }
 
 .qm-title-heading select,
