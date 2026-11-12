@@ -248,13 +248,31 @@ abstract class QM_Output_Html extends QM_Output {
 	}
 
 	/**
-	 * Returns the column sorter controls. No longer used. Safe for output.
+	 * Returns the column sorter controls. Safe for output.
+	 *
+	 * The markup matches the sort control in client-side rendered panels. In a
+	 * PHP-rendered panel, the table rows are sorted by the cells' text, or by
+	 * their `data-qm-sort-weight` attribute if present. The column heading
+	 * element needs the `qm-sortable-column` class.
 	 *
 	 * @param string $heading Heading text for the column. Optional.
 	 * @return string Markup for the column sorter controls.
 	 */
 	protected function build_sorter( $heading = '' ) {
-		return esc_html( $heading );
+		$label = ( '#' === $heading ) ? __( 'Sequence', 'query-monitor' ) : $heading;
+
+		return sprintf(
+			'<button type="button" class="qm-sort-controls" aria-label="%1$s"><span class="qm-sort-heading">%2$s</span>%3$s</button>',
+			esc_attr(
+				sprintf(
+					/* translators: %s: Column heading */
+					__( 'Sort by %s', 'query-monitor' ),
+					$label
+				)
+			),
+			esc_html( $heading ),
+			QueryMonitor::icon( 'arrow-down' )
+		);
 	}
 
 	/**

@@ -3,6 +3,7 @@ import { PanelContext, PanelContextType } from '../contexts/panel-context';
 import { MainContext } from '../contexts/main-context';
 import { getPanel, isOverviewPanel, isSettingsPanel } from './panel-registry';
 import { ErrorPanel } from './error-panel';
+import { sortTableByColumn } from './php-panel-sorting';
 import { Warning } from '../components/warning';
 import { DataTypes } from '../data-types';
 import { PanelProps, PanelDataMap } from '../types';
@@ -148,13 +149,23 @@ const PhpPanelFallback = ( { panelId }: { panelId: string } ) => {
 			}
 		};
 
+		const handleSort = ( e: Event ) => {
+			const button = ( e.target as HTMLElement ).closest( '.qm-sort-controls' ) as HTMLButtonElement | null;
+
+			if ( button ) {
+				sortTableByColumn( button );
+			}
+		};
+
 		phpPanel.addEventListener( 'click', handleToggle );
 		phpPanel.addEventListener( 'click', handleFilterTrigger );
+		phpPanel.addEventListener( 'click', handleSort );
 
 		// Cleanup: move the element back to its original location
 		return () => {
 			phpPanel.removeEventListener( 'click', handleToggle );
 			phpPanel.removeEventListener( 'click', handleFilterTrigger );
+			phpPanel.removeEventListener( 'click', handleSort );
 
 			if ( phpPanel && originalParentRef.current ) {
 				const { parent, nextSibling } = originalParentRef.current;

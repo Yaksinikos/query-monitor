@@ -297,6 +297,36 @@ export const getStackCol = <TDataRow extends DataRowWithStack>( rows: TDataRow[]
 	return column;
 }
 
+interface SortButtonProps {
+	heading: string;
+	onClick: () => void;
+	showHeading?: boolean;
+}
+
+/**
+ * Column sort control. The markup matches `QM_Output_Html::build_sorter()` so
+ * React and PHP-rendered panels share the same styles.
+ */
+const SortButton = ( { heading, onClick, showHeading = true }: SortButtonProps ) => (
+	<button
+		type="button"
+		className="qm-sort-controls"
+		onClick={ onClick }
+		aria-label={ sprintf(
+			/* translators: %s: Column heading */
+			__( 'Sort by %s', 'query-monitor' ),
+			heading
+		) }
+	>
+		{ showHeading && (
+			<span className="qm-sort-heading">
+				{ heading }
+			</span>
+		) }
+		<Icon name="arrow-down" />
+	</button>
+);
+
 const countData = <TDataRow extends {}>( data: TDataRow[] ) => {
 	return data.reduce( ( total, row ) => {
 		if ( 'count' in row ) {
@@ -480,23 +510,7 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 									scope="col"
 									aria-sort={ sortable ? ( sorted ? `${ sorted }ending` as const : 'none' ) : undefined }
 								>
-									{ sortable ? (
-										<button
-											type="button"
-											className="qm-sort-controls"
-											onClick={ () => toggleSort( key, col ) }
-											aria-label={ sprintf(
-												/* translators: %s: Column heading */
-												__( 'Sort by %s', 'query-monitor' ),
-												col.heading
-											) }
-										>
-											<span className="qm-sort-heading">
-												{ col.heading }
-											</span>
-											<Icon name="arrow-down" />
-										</button>
-									) : colFilters.length && total > 1 ? (
+									{ colFilters.length && total > 1 ? (
 										<div className="qm-filter-container">
 											<label htmlFor={ `qm-filter-${ key }` }>
 												{ col.heading }
@@ -520,7 +534,20 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 													</Fragment>
 												) ) }
 											</select>
+											{ sortable && (
+												// The label already shows the heading.
+												<SortButton
+													heading={ col.heading }
+													onClick={ () => toggleSort( key, col ) }
+													showHeading={ false }
+												/>
+											) }
 										</div>
+									) : sortable ? (
+										<SortButton
+											heading={ col.heading }
+											onClick={ () => toggleSort( key, col ) }
+										/>
 									) : (
 										col.heading
 									) }

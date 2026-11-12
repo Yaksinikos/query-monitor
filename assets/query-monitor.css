@@ -1384,6 +1384,11 @@ select {
 		}
 	}
 
+	.qm-filter-container .qm-sort-controls {
+		margin-left: 4px;
+		width: auto;
+	}
+
 	.qm-sort-heading {
 		flex-grow: 1;
 		white-space: nowrap;
