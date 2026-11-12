@@ -4,6 +4,7 @@ import {
 } from './caller';
 import { Component } from './component';
 import { Duration } from './components/duration';
+import { Icon } from './components/icon';
 import { Warning } from './components/warning';
 import { PanelContext } from './contexts/panel-context';
 import {
@@ -18,19 +19,24 @@ import {
 import { StackCaller } from './stack-caller';
 import {
 	__,
+	sprintf,
 } from '@wordpress/i18n';
 
 import { Fragment, type ComponentChildren } from 'preact';
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { MainContext } from './contexts/main-context';
 
+/**
+ * Column callbacks receive the row, its rendered position `i`, and its `index`
+ * in the unfiltered, unsorted data passed to the table.
+ */
 export type Col<TDataRow> = {
 	className?: string | ( ( row: TDataRow, i: number ) => string );
 	heading: string;
-	render: ( row: TDataRow, i: number ) => ( ComponentChildren | string );
+	render: ( row: TDataRow, i: number, index: number ) => ( ComponentChildren | string );
 	filters?: ColFilters<TDataRow>;
 	sorting?: ColSorting<TDataRow>;
-	cellHasNotice?: ( row: TDataRow, i: number ) => boolean;
+	cellHasNotice?: ( row: TDataRow, i: number, index: number ) => boolean;
 	cellHasWarning?: ( row: TDataRow, i: number ) => boolean;
 	wrap?: boolean;
 	rowSpan?: ( row: TDataRow, i: number, data: TDataRow[] ) => number;
@@ -210,7 +216,7 @@ export const getComponentCol = <TDataRow extends DataRowWithTrace>( rows: TDataR
 };
 
 interface isSlowCallback {
-	( row: DataRowWithTime, i: number ): boolean;
+	( row: DataRowWithTime, i: number, index: number ): boolean;
 }
 
 export const getTimeCol = <TDataRow extends DataRowWithTime>( _rows: TDataRow[], slow: isSlowCallback = () => false ) => {
@@ -218,7 +224,7 @@ export const getTimeCol = <TDataRow extends DataRowWithTime>( _rows: TDataRow[],
 		className: 'qm-num',
 		heading: __( 'Time', 'query-monitor' ),
 		render: ( row ) => <Duration value={ row.ltime ?? 0 } />,
-		cellHasNotice: ( row, i ) => slow && slow( row, i ),
+		cellHasNotice: ( row, i, index ) => slow && slow( row, i, index ),
 		sorting: {
 			field: 'ltime',
 			default: 'desc',
@@ -312,9 +318,12 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 	} = useContext( MainContext );
 	const tbodyRef = useRef<HTMLTableSectionElement>( null );
 	const total = countData( data );
+
+	// Index of each row in the data as passed in, before filtering and sorting.
+	const dataIndex = new Map( data.map( ( row, i ) => [ row, i ] ) );
 	const nonEmptyCols = Object.entries( cols ).filter( ( entry ): entry is [string, Col<TDataRow>] => ( entry[1] ? true : false ) );
 
-	const highlightedRows = new Set<number>();
+	const highlightedRows = new Set<TDataRow>();
 
 	for ( const [ filterName, filterValue ] of Object.entries( filters ) ) {
 		if ( ! ( filterName in cols ) ) {
@@ -346,7 +355,7 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 			if ( filterName === 'component' ) {
 				for ( let i = 0; i < data.length; i++ ) {
 					if ( colFilters.callback( data[ i ], filterValue ) ) {
-						highlightedRows.add( i );
+						highlightedRows.add( data[ i ] );
 					}
 				}
 			}
@@ -361,10 +370,29 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 	const originalIndices = data.map( ( _, i ) => i );
 
 	const count = countData( data );
-	const [ sorting, _setSorting ] = useState( {
+	const [ sorting, setSorting ] = useState<{ orderby?: string, order: 'asc'|'desc' }>( {
 		orderby,
 		order,
 	} );
+
+	/**
+	 * Cycles the sort order for a column: its default direction first, then the
+	 * opposite one. Tables without a default order return to their original
+	 * order after that.
+	 */
+	const toggleSort = ( key: string, col: Col<TDataRow> ) => {
+		const initial = col.sorting?.default ?? 'desc';
+
+		if ( sorting.orderby !== key ) {
+			setSorting( { orderby: key, order: initial } );
+		} else if ( sorting.order === initial ) {
+			setSorting( { orderby: key, order: initial === 'asc' ? 'desc' : 'asc' } );
+		} else if ( ! orderby ) {
+			setSorting( { orderby: undefined, order } );
+		} else {
+			setSorting( { orderby: key, order: initial } );
+		}
+	};
 
 	if ( sorting.orderby ) {
 		const sortCol = cols[ sorting.orderby ];
@@ -382,10 +410,12 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 					return sorting.order === 'asc' ? 1 : -1;
 				}
 
-				return 0;
+				// Keep equal rows in their original order.
+				return a.idx - b.idx;
 			} );
+			// Copy rather than sort in place, as `data` may be the caller's array.
+			data = paired.map( ( pair ) => pair.row );
 			for ( let i = 0; i < paired.length; i++ ) {
-				data[ i ] = paired[ i ].row;
 				originalIndices[ i ] = paired[ i ].idx;
 			}
 		}
@@ -433,6 +463,8 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 						{ nonEmptyCols.map( ( [ key, col ] ) => {
 							const colFilters = col.filters ? col.filters.options : [];
 							const filterValue = ( key in filters ) ? filters[ key ] : '';
+							const sortable = !! col.sorting && total > 1;
+							const sorted = sortable && sorting.orderby === key ? sorting.order : null;
 
 							return (
 								<th
@@ -440,11 +472,31 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 									className={ clsx( `qm-col-${key}`, typeof col.className === 'string' ? col.className : undefined, {
 										'qm-filterable-column': colFilters.length,
 										'qm-filtered': filterValue !== '',
+										'qm-sortable-column': sortable,
+										'qm-sorted-asc': sorted === 'asc',
+										'qm-sorted-desc': sorted === 'desc',
 									} ) }
 									role="columnheader"
 									scope="col"
+									aria-sort={ sortable ? ( sorted ? `${ sorted }ending` as const : 'none' ) : undefined }
 								>
-									{ colFilters.length && total > 1 ? (
+									{ sortable ? (
+										<button
+											type="button"
+											className="qm-sort-controls"
+											onClick={ () => toggleSort( key, col ) }
+											aria-label={ sprintf(
+												/* translators: %s: Column heading */
+												__( 'Sort by %s', 'query-monitor' ),
+												col.heading
+											) }
+										>
+											<span className="qm-sort-heading">
+												{ col.heading }
+											</span>
+											<Icon name="arrow-down" />
+										</button>
+									) : colFilters.length && total > 1 ? (
 										<div className="qm-filter-container">
 											<label htmlFor={ `qm-filter-${ key }` }>
 												{ col.heading }
@@ -493,7 +545,7 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 						key={ i }
 						className={ clsx( {
 							'qm-warn': rowHasError && rowHasError( row ),
-							'qm-highlight': highlightedRows.has( i ),
+							'qm-highlight': highlightedRows.has( row ),
 							'qm-jump-highlight': isJumpTarget && originalIndices[ i ] === jumpToRow.row,
 						} ) }
 					>
@@ -509,12 +561,12 @@ export const Table = <TDataRow extends {}, TCols extends Cols<TDataRow> = Cols<T
 								<td
 									key={ key }
 									className={ clsx( `qm-cell-${key}`, typeof col.className === 'function' ? col.className( row, i ) : col.className, {
-										'qm-notice': col.cellHasNotice && col.cellHasNotice( row, i ),
+										'qm-notice': col.cellHasNotice && col.cellHasNotice( row, i, dataIndex.get( row ) ?? i ),
 										'qm-wrap': col.wrap,
 									} ) }
 									rowSpan={ span > 1 ? span : undefined }
 								>
-									{ col.render( row, i ) }
+									{ col.render( row, i, dataIndex.get( row ) ?? i ) }
 								</td>
 							);
 						} ) }

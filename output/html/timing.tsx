@@ -173,22 +173,22 @@ export const Timing = ( { data }: PanelProps<DataTypes['timing']> ) => {
 			},
 			caller: {
 				...getCallerCol( flattenedData, settings ),
-				render: ( row, i ) => {
+				render: ( row, i, index ) => {
 					// Don't show caller for lap rows
 					if ( 'isLap' in row && row.isLap ) {
 						return '';
 					}
-					return getCallerCol( flattenedData, settings ).render( row, i );
+					return getCallerCol( flattenedData, settings ).render( row, i, index );
 				},
 			},
 			component: {
 				...getComponentCol( flattenedData ),
-				render: ( row, i ) => {
+				render: ( row, i, index ) => {
 					// Don't show component for lap rows
 					if ( 'isLap' in row && row.isLap ) {
 						return '';
 					}
-					return getComponentCol( flattenedData ).render( row, i );
+					return getComponentCol( flattenedData ).render( row, i, index );
 				},
 			},
 		} }
