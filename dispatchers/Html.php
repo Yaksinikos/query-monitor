@@ -411,7 +411,7 @@ class QM_Dispatcher_Html extends QM_Dispatcher {
 
 		$this->output_assets();
 
-		$encoded = QM_Util::json_encode( $json, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG );
+		$encoded = self::encode_inline_data( $json );
 
 		wp_print_inline_script_tag(
 			sprintf(
@@ -422,6 +422,32 @@ class QM_Dispatcher_Html extends QM_Dispatcher {
 				'id' => 'query-monitor-inline-data',
 			)
 		);
+	}
+
+	/**
+	 * Encodes the data for the inline script with one element per line.
+	 *
+	 * Tools that scan the page source with regular expressions, such as email
+	 * address detectors, can take quadratic time on a single long line with many
+	 * quotes and time out. Quotes within strings are encoded as `"`, so the
+	 * remaining quotes are structural and each line contains only a few.
+	 *
+	 * @param array<string, mixed> $json The data to encode.
+	 * @return string|false The encoded data, or false on failure.
+	 */
+	private static function encode_inline_data( array $json ) {
+		$encoded = QM_Util::json_encode( $json, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_QUOT | JSON_PRETTY_PRINT );
+
+		if ( false === $encoded ) {
+			return false;
+		}
+
+		// Remove the indentation and the spaces after keys that pretty printing adds. Strings can't
+		// contain a raw newline, and with JSON_HEX_QUOT they can't contain a raw quote either, so
+		// both replacements only affect the JSON structure.
+		$encoded = (string) preg_replace( '/\n\s+/', "\n", $encoded );
+
+		return str_replace( '": ', '":', $encoded );
 	}
 
 	/**
