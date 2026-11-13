@@ -5,7 +5,7 @@ import { Fatal } from '../output/fatal';
 import { iSettings } from '../output/panels/panels';
 import { MainContextType, DurationUnit } from '../output/contexts/main-context';
 
-import { iQMData, initializeQMData, mergeSettings, registerAllPanels, buildMenus } from './panels';
+import { iQMData, initializeQMData, mergeSettings, registerAllPanels, buildMenus, hasPanel } from './panels';
 
 declare const QueryMonitorData: iQMData;
 
@@ -104,7 +104,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		localStorage.setItem( durationUnitKey, unit );
 	}
 
-	const active = localStorage.getItem( panelKey ) ?? '';
+	// The stored panel may not be available on this page, for example a panel
+	// that only appears when there's data for it. Show the overview instead.
+	const storedActive = localStorage.getItem( panelKey ) ?? '';
+	const active = ( storedActive === '' || storedActive === 'settings' || hasPanel( panel_menu, storedActive ) )
+		? storedActive
+		: 'overview';
 	const side = localStorage.getItem( positionKey ) === 'right';
 	const editor = localStorage.getItem( editorKey ) ?? '';
 	const theme = localStorage.getItem( themeKey ) ?? 'auto';
