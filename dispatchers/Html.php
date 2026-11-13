@@ -577,9 +577,8 @@ class QM_Dispatcher_Html extends QM_Dispatcher {
 
 		printf(
 			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
-			'<link rel="stylesheet" href="%1$s?ver=%2$s" media="all" />',
-			esc_url( QueryMonitor::init()->plugin_url( 'assets/build/toolbar.css' ) ),
-			esc_attr( QM_VERSION )
+			'<link rel="stylesheet" href="%s" media="all" />',
+			esc_url( $this->get_build_asset_url( 'toolbar.css' ) )
 		);
 
 		// This unused wrapper with an attribute serves to help the #qm-fatal div break out of an
@@ -830,45 +829,51 @@ class QM_Dispatcher_Html extends QM_Dispatcher {
 	 * @param array<string, array{file: string}> $data Production manifest data.
 	 */
 	private function output_production_assets( array $data ): void {
-		$base_url = $this->qm->plugin_url( 'assets/build' );
-
 		// Toolbar CSS (loaded on the page, outside shadow DOM)
 		$toolbar_file = $data['assets/toolbar.css']['file'] ?? null;
 		if ( $toolbar_file ) {
-			$url = add_query_arg(
-				'ver',
-				QM_VERSION,
-				$base_url . '/' . $toolbar_file,
-			);
 			printf(
 				'<link rel="stylesheet" href="%s">' . "\n",
-				esc_url( $url )
+				esc_url( $this->get_build_asset_url( $toolbar_file ) )
 			);
 		}
 
 		// Panel CSS URL (passed to JS via data attribute, loaded inside shadow DOM)
 		$css_file = $data['assets/query-monitor.css']['file'] ?? null;
 		if ( $css_file ) {
-			$this->panel_css_url = add_query_arg(
-				'ver',
-				QM_VERSION,
-				$base_url . '/' . $css_file,
-			);
+			$this->panel_css_url = $this->get_build_asset_url( $css_file );
 		}
 
 		// JS
 		$js_file = $data['src/index.tsx']['file'] ?? null;
 		if ( $js_file ) {
-			$url = add_query_arg(
-				'ver',
-				QM_VERSION,
-				$base_url . '/' . $js_file,
-			);
 			wp_print_script_tag( [
 				'type' => 'module',
-				'src' => esc_url( $url ),
+				'src' => esc_url( $this->get_build_asset_url( $js_file ) ),
 			] );
 		}
+	}
+
+	/**
+	 * Returns the URL of a built asset. The version includes the file's
+	 * modification time so browsers load the new file after a rebuild.
+	 *
+	 * @param string $file File name in the assets/build directory.
+	 * @return string The asset URL.
+	 */
+	private function get_build_asset_url( string $file ): string {
+		$path = dirname( __DIR__ ) . '/assets/build/' . $file;
+		$version = QM_VERSION;
+
+		if ( is_file( $path ) ) {
+			$version .= '-' . filemtime( $path );
+		}
+
+		return add_query_arg(
+			'ver',
+			$version,
+			$this->qm->plugin_url( 'assets/build/' . $file ),
+		);
 	}
 }
 

@@ -184,6 +184,15 @@ function buildSub( items: PanelMenuItem[] ): iQMMenu[ 'sub' ] {
 }
 
 /**
+ * Whether the panel menu contains the given panel, including in child items.
+ */
+export function hasPanel( menu: iNavMenu, panel: string ): boolean {
+	return Object.values( menu ).some( ( item ) => (
+		item.panel === panel || ( item.children !== undefined && hasPanel( item.children, panel ) )
+	) );
+}
+
+/**
  * Builds the admin toolbar menu and panel menu. Client entries come first
  * (ordered by their registration); any server-provided entries (e.g. third-party
  * panels using the PHP filters) are appended to the bottom in their server order.
