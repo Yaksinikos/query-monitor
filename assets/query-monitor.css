@@ -1361,6 +1361,12 @@ select {
 		white-space: nowrap;
 	}
 
+	/* Rows hidden by filters in PHP-rendered panels, one class per filter. */
+	.qm-hide,
+	tbody tr[class*="qm-hide-"] {
+		display: none;
+	}
+
 	/** Sorters */
 
 	thead th.qm-sortable-column:hover {

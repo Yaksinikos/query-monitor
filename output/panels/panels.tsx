@@ -3,6 +3,7 @@ import { PanelContext, PanelContextType } from '../contexts/panel-context';
 import { MainContext } from '../contexts/main-context';
 import { getPanel, isOverviewPanel, isSettingsPanel } from './panel-registry';
 import { ErrorPanel } from './error-panel';
+import { filterTableRows } from './php-panel-filtering';
 import { sortTableByColumn } from './php-panel-sorting';
 import { Warning } from '../components/warning';
 import { DataTypes } from '../data-types';
@@ -157,15 +158,25 @@ const PhpPanelFallback = ( { panelId }: { panelId: string } ) => {
 			}
 		};
 
+		const handleFilter = ( e: Event ) => {
+			const select = ( e.target as HTMLElement ).closest( 'select.qm-filter' ) as HTMLSelectElement | null;
+
+			if ( select ) {
+				filterTableRows( select );
+			}
+		};
+
 		phpPanel.addEventListener( 'click', handleToggle );
 		phpPanel.addEventListener( 'click', handleFilterTrigger );
 		phpPanel.addEventListener( 'click', handleSort );
+		phpPanel.addEventListener( 'change', handleFilter );
 
 		// Cleanup: move the element back to its original location
 		return () => {
 			phpPanel.removeEventListener( 'click', handleToggle );
 			phpPanel.removeEventListener( 'click', handleFilterTrigger );
 			phpPanel.removeEventListener( 'click', handleSort );
+			phpPanel.removeEventListener( 'change', handleFilter );
 
 			if ( phpPanel && originalParentRef.current ) {
 				const { parent, nextSibling } = originalParentRef.current;

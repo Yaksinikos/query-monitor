@@ -225,7 +225,11 @@ abstract class QM_Output_Html extends QM_Output {
 	}
 
 	/**
-	 * Returns the table filter controls. No longer used. Safe for output.
+	 * Returns the table filter controls. Safe for output.
+	 *
+	 * In a PHP-rendered panel, choosing a value hides the table rows whose
+	 * `data-qm-{$name}` attribute doesn't equal the value or contain it as a
+	 * space-separated word.
 	 *
 	 * @param  string         $name   The name for the `data-` attributes that get filtered by this control.
 	 * @param  (string|int)[] $values Option values for this control.
@@ -243,7 +247,51 @@ abstract class QM_Output_Html extends QM_Output {
 	 * @return string Markup for the table filter controls.
 	 */
 	protected function build_filter( $name, $values, $label, $args = array() ) {
-		return esc_html( $label );
+		if ( empty( $values ) ) {
+			return esc_html( $label );
+		}
+
+		$args = array_merge( array(
+			'highlight' => '',
+			'prepend' => array(),
+			'append' => array(),
+		), $args );
+
+		$core_val = __( 'WordPress Core', 'query-monitor' );
+		$core_key = array_search( $core_val, $values, true );
+		$core_attr = '';
+
+		if ( 'component' === $name && count( $values ) > 1 && false !== $core_key ) {
+			$args['append'][ $core_val ] = $core_val;
+			$args['append']['non-core'] = __( 'Non-WordPress Core', 'query-monitor' );
+			$core_attr = sprintf( ' data-qm-core="%s"', esc_attr( $core_val ) );
+			unset( $values[ $core_key ] );
+		}
+
+		$filter_id = 'qm-filter-' . $this->collector->id . '-' . $name;
+
+		$out = '<div class="qm-filter-container">';
+		$out .= '<label for="' . esc_attr( $filter_id ) . '">' . esc_html( $label ) . '</label>';
+		$out .= '<select id="' . esc_attr( $filter_id ) . '" class="qm-filter" data-filter="' . esc_attr( $name ) . '" data-highlight="' . esc_attr( $args['highlight'] ) . '"' . $core_attr . '>';
+		$out .= '<option value="">' . esc_html_x( 'All', '"All" option for filters', 'query-monitor' ) . '</option>';
+
+		foreach ( $args['prepend'] as $value => $option_label ) {
+			$out .= '<option value="' . esc_attr( (string) $value ) . '">' . esc_html( $option_label ) . '</option>';
+		}
+
+		foreach ( $values as $key => $value ) {
+			$option_value = ( is_int( $key ) && $key >= 0 ) ? $value : $key;
+			$out .= '<option value="' . esc_attr( (string) $option_value ) . '">' . esc_html( (string) $value ) . '</option>';
+		}
+
+		foreach ( $args['append'] as $value => $option_label ) {
+			$out .= '<option value="' . esc_attr( (string) $value ) . '">' . esc_html( $option_label ) . '</option>';
+		}
+
+		$out .= '</select>';
+		$out .= '</div>';
+
+		return $out;
 	}
 
 	/**
