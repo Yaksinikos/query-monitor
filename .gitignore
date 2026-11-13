@@ -4,6 +4,7 @@
 /vendor
 /node_modules
 /assets/build
+/dist
 /.playwright-mcp
 /tests/test-results
 /tests/cache
