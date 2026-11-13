@@ -9,13 +9,24 @@ interface Props {
 	children: ComponentChildren;
 }
 
+/**
+ * Returns the error message followed by the stack trace. Some browsers, such
+ * as Firefox, don't include the message in the stack.
+ */
+const getErrorDetails = ( error: Error ): string => {
+	const message = String( error );
+	const stack = error.stack ?? '';
+
+	return stack.startsWith( message ) ? stack : `${ message }\n${ stack }`;
+};
+
 export const ErrorBoundary = ( { children }: Props ) => {
 	const [error] = useErrorBoundary();
 	const [copied, setCopied] = useState( false );
 
 	const copyToClipboard = () => {
 		if ( error instanceof Error ) {
-			navigator.clipboard.writeText( error.stack || '' ).then( () => {
+			navigator.clipboard.writeText( getErrorDetails( error ) ).then( () => {
 				setCopied( true );
 				setTimeout( () => setCopied( false ), 2000 );
 			} );
@@ -42,7 +53,7 @@ export const ErrorBoundary = ( { children }: Props ) => {
 						</Warning>
 					</p>
 					<pre>
-						{ error.stack }
+						{ getErrorDetails( error ) }
 					</pre>
 				</>
 			) : (

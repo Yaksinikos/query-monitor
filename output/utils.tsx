@@ -49,14 +49,123 @@ export const qm_l10n = {
 	},
 };
 
-function highlightStrings( text: string ): ( string | JSX.Element )[] {
-	const parts = text.split( /('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/ );
+interface SQLPart {
+	text: string;
+	isValue: boolean;
+}
 
-	return parts.map( ( part, i ) =>
-		i % 2 === 1
-			? <span key={ i } className="qm-sql-value">{ part }</span>
-			: part
-	);
+interface SQLLine {
+	keyword: string | null;
+	parts: SQLPart[];
+}
+
+/**
+ * Splits SQL into quoted values and the text between them, in a single pass.
+ *
+ * Handles backslash escapes and doubled quotes within values. An unterminated
+ * value runs to the end of the SQL.
+ */
+function splitSQLValues( sql: string ): SQLPart[] {
+	const parts: SQLPart[] = [];
+	let textStart = 0;
+	let i = 0;
+
+	while ( i < sql.length ) {
+		const quote = sql[ i ];
+
+		if ( quote !== '\'' && quote !== '"' ) {
+			i++;
+			continue;
+		}
+
+		let end = i + 1;
+
+		while ( end < sql.length ) {
+			if ( sql[ end ] === '\\' ) {
+				end += 2;
+			} else if ( sql[ end ] === quote && sql[ end + 1 ] === quote ) {
+				end += 2;
+			} else if ( sql[ end ] === quote ) {
+				break;
+			} else {
+				end++;
+			}
+		}
+
+		if ( i > textStart ) {
+			parts.push( { text: sql.slice( textStart, i ), isValue: false } );
+		}
+
+		parts.push( { text: sql.slice( i, end + 1 ), isValue: true } );
+		textStart = i = end + 1;
+	}
+
+	if ( textStart < sql.length ) {
+		parts.push( { text: sql.slice( textStart ), isValue: false } );
+	}
+
+	return parts;
+}
+
+/**
+ * Splits SQL into lines that each start with a recognised keyword, ignoring
+ * keywords within quoted values. The first line holds any content before the
+ * first keyword and has no keyword.
+ */
+function splitSQLLines( sql: string, keywordRegex: RegExp ): SQLLine[] {
+	const lines: SQLLine[] = [ { keyword: null, parts: [] } ];
+
+	for ( const part of splitSQLValues( sql ) ) {
+		if ( part.isValue ) {
+			lines[ lines.length - 1 ].parts.push( part );
+			continue;
+		}
+
+		// The capturing group puts each keyword between the text either side of it.
+		const pieces = part.text.split( keywordRegex );
+
+		lines[ lines.length - 1 ].parts.push( { text: pieces[0], isValue: false } );
+
+		for ( let i = 1; i < pieces.length; i += 2 ) {
+			lines.push( {
+				keyword: pieces[ i ],
+				parts: [ { text: pieces[ i + 1 ], isValue: false } ],
+			} );
+		}
+	}
+
+	return lines;
+}
+
+function renderSQLParts( parts: SQLPart[] ): ( string | JSX.Element )[] {
+	return parts.map( ( part, i ) => (
+		part.isValue
+			? <span key={ i } className="qm-sql-value">{ part.text }</span>
+			: part.text
+	) );
+}
+
+/**
+ * Trims whitespace from the start and end of a line's text.
+ */
+function trimSQLParts( parts: SQLPart[] ): SQLPart[] {
+	return parts.map( ( part, i ) => {
+		if ( part.isValue ) {
+			return part;
+		}
+
+		let text = part.text;
+
+		if ( i === 0 ) {
+			text = text.trimStart();
+		}
+
+		if ( i === parts.length - 1 ) {
+			text = text.trimEnd();
+		}
+
+		return { ...part, text };
+	} );
 }
 
 export function formatSQL( sql: string ): JSX.Element[] {
@@ -78,11 +187,11 @@ export function formatSQL( sql: string ): JSX.Element[] {
 		trimmed = trimmed.slice( 0, -trailingMatch[0].length );
 	}
 
-	const formatted = ' ' + trimmed;
-	const lineRegex = ' (ADD|AFTER|ALTER|AND|BEGIN|CASE|COMMIT|CREATE|DELETE|DESCRIBE|DO|DROP|ELSE|END|EXCEPT|EXPLAIN|FROM|GROUP BY|GROUP|HAVING|INNER JOIN|INSERT|INTERSECT|JOIN|LEFT JOIN|LIMIT|ON|OR|ORDER BY|ORDER|OUTER JOIN|RENAME|REPLACE|RIGHT JOIN|ROLLBACK|SELECT|SET|SHOW|START|THEN|TRUNCATE|UNION|UPDATE|USE|USING|VALUES|WHEN|WHERE|XOR) ';
-	const lines = formatted.split( new RegExp( lineRegex ) );
+	const keywordRegex = / (ADD|AFTER|ALTER|AND|BEGIN|CASE|COMMIT|CREATE|DELETE|DESCRIBE|DO|DROP|ELSE|END|EXCEPT|EXPLAIN|FROM|GROUP BY|GROUP|HAVING|INNER JOIN|INSERT|INTERSECT|JOIN|LEFT JOIN|LIMIT|ON|OR|ORDER BY|ORDER|OUTER JOIN|RENAME|REPLACE|RIGHT JOIN|ROLLBACK|SELECT|SET|SHOW|START|THEN|TRUNCATE|UNION|UPDATE|USE|USING|VALUES|WHEN|WHERE|XOR) /;
+	const [ preamble, ...lines ] = splitSQLLines( ' ' + trimmed, keywordRegex );
+	const preambleParts = trimSQLParts( preamble.parts );
+	const hasPreamble = preambleParts.some( ( part ) => part.text !== '' );
 	const collection: JSX.Element[] = [];
-	let index = 0;
 
 	if ( leadingComment ) {
 		collection.push(
@@ -93,30 +202,26 @@ export function formatSQL( sql: string ): JSX.Element[] {
 	}
 
 	// Render any content before the first recognised keyword.
-	if ( lines[0].trim() ) {
+	if ( hasPreamble ) {
 		collection.push(
 			<Fragment key="preamble">
 				{ collection.length > 0 && <br /> }
-				{ highlightStrings( lines[0].trim() ) }
+				{ renderSQLParts( preambleParts ) }
 			</Fragment>
 		);
 	}
 
-	formatted.replace( new RegExp( lineRegex, 'g' ), ( match, keyword ) => {
-		index += 2;
-
+	lines.forEach( ( line, i ) => {
 		collection.push(
-			<Fragment key={ index }>
-				{ ( index > 2 || leadingComment || lines[0].trim() ) && (
+			<Fragment key={ i }>
+				{ ( i > 0 || leadingComment || hasPreamble ) && (
 					<br />
 				) }
-				<b>{ keyword }</b>
+				<b>{ line.keyword }</b>
 				{ ' ' }
-				{ highlightStrings( lines[ index ] ) }
+				{ renderSQLParts( line.parts ) }
 			</Fragment>
 		);
-
-		return '';
 	} );
 
 	if ( collection.length === 0 ) {
