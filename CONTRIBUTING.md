@@ -94,6 +94,42 @@ To stop them:
 
 The integration and acceptance test scripts call `docker compose` directly, so running them with Podman requires `docker` to be available on your `PATH`, for example through Podman Desktop's Docker compatibility.
 
+## Building an Installable Zip
+
+A git checkout can't be copied to a server as it is: it contains the development dependencies, and it lacks the built assets and the production autoloader. To build a zip that installs like the one from WordPress.org:
+
+1. Commit your changes. Only committed files are packaged.
+2. Build the assets (on Windows, see [Developing on Windows](#developing-on-windows) above):
+
+       npm run build
+
+3. Export the plugin files into a temporary folder, add the built assets, generate the autoloader without the development dependencies, and zip the result into `dist/query-monitor.zip`:
+
+       rm -rf /tmp/qm-release && mkdir -p /tmp/qm-release/query-monitor dist
+       git archive HEAD | tar -x -C /tmp/qm-release/query-monitor
+       cp -r assets/build /tmp/qm-release/query-monitor/assets/
+       composer dump-autoload --no-dev --classmap-authoritative --working-dir=/tmp/qm-release/query-monitor
+       rm -f dist/query-monitor.zip && (cd /tmp/qm-release && zip -r - query-monitor) > dist/query-monitor.zip
+
+`git archive` leaves out the files marked `export-ignore` in `.gitattributes`, such as the tests, docs, and TypeScript sources. Query Monitor has no runtime dependencies, so `vendor` only contains Composer's class autoloader. The `dist` folder is ignored by git. The plugin files are staged outside the repo so that the coding standards checks don't pick up the copies.
+
+On Windows, in PowerShell with Podman running Composer:
+
+	$out = "$env:TEMP\qm-release"
+	Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
+	New-Item -ItemType Directory -Force "$out\query-monitor", dist | Out-Null
+	git archive -o "$out\query-monitor.tar" HEAD
+	tar.exe -x -f "$out\query-monitor.tar" -C "$out\query-monitor"
+	Copy-Item -Recurse assets\build "$out\query-monitor\assets\"
+	podman run --rm -v "$out\query-monitor:/app" -w /app docker.io/library/composer:2 dump-autoload --no-dev --classmap-authoritative
+	tar.exe -a -c -f "$PWD\dist\query-monitor.zip" -C $out query-monitor
+
+Use `tar.exe` to create the zip. `Compress-Archive` and Explorer's "Send to > Compressed (zipped) folder" store paths with backslashes, which break when the zip is extracted on a Linux server.
+
+To install the zip, upload it in the WordPress admin under Plugins > Add New Plugin > Upload Plugin and choose to replace the current version, or extract it into `wp-content/plugins`. Rebuild the zip after every change, as the autoloader's class map is generated from the files at build time.
+
+If you deploy a fork, add `Update URI: false` to the plugin header in `query-monitor.php`. Otherwise WordPress offers the next WordPress.org release as an update, which replaces your version.
+
 ## Data Type Generation
 
 Query Monitor uses JSON Schema to define the structure of data passed between PHP collectors and React output panels. This ensures type safety across both languages.
