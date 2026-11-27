@@ -48,6 +48,7 @@ class QM_Collector_DB_Queries extends QM_DataCollector {
 	 */
 	public $wpdb;
 
+	#[\Override]
 	public function get_storage(): QM_Data {
 		return new QM_Data_DB_Queries();
 	}
@@ -99,6 +100,7 @@ class QM_Collector_DB_Queries extends QM_DataCollector {
 	/**
 	 * @return void
 	 */
+	#[\Override]
 	public function process() {
 		$this->data->total_qs = 0;
 		$this->data->errors = array();
@@ -156,6 +158,8 @@ class QM_Collector_DB_Queries extends QM_DataCollector {
 		 * @phpstan-var QueryStandard|QueryVIP $query
 		 */
 		foreach ( $wpdb->queries as $query ) {
+			unset( $trace, $result );
+
 			if ( isset( $query['query'], $query['elapsed'], $query['debug'] ) ) {
 				// WordPress.com VIP.
 				$sql = $query['query'];
@@ -195,7 +199,7 @@ class QM_Collector_DB_Queries extends QM_DataCollector {
 
 			if ( false !== strpos( $stack, ' WP->main,' ) ) {
 				// Ignore comments that are appended to queries by some web hosts.
-				$match_sql = preg_replace( '#/\*.*?\*/\s*$#s', '', $sql );
+				$match_sql = preg_replace( '#\s*/\*.*?\*/\s*$#s', '', $sql );
 
 				$is_main_query = ( $request === $match_sql );
 
